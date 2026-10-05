@@ -1,0 +1,15 @@
+{
+    "$schema": "vendor/pushinbr/pam-native-plugin-kit/resources/pam-native.idl.schema.json",
+    "version": 1,
+    "namespace": "Pam.Audio",
+    "enums": {
+        "PlaybackRate": {"X0_5": 1, "X0_75": 2, "X1": 3, "X1_25": 4, "X1_5": 5, "X1_75": 6, "X2": 7},
+        "AudioRoute": {"Auto": 1, "Speaker": 2, "Earpiece": 3},
+        "PlaybackState": {"Idle": 1, "Buffering": 2, "Playing": 3, "Paused": 4, "Ended": 5, "Failed": 6},
+        "AudioEventKind": {"Progress": 1, "State": 2, "ItemChanged": 3, "Ended": 4, "Failure": 5, "Route": 6}
+    },
+    "records": {
+        "PlaybackProgress": {"position": "int", "duration": "int", "buffered": "int", "index": "int"},
+        "AudioEvent": {"kind": "AudioEventKind", "state": "PlaybackState?", "index": "int?", "route": "AudioRoute?", "message": "string?"}
+    }
+}

@@ -1,0 +1,1 @@
+-keep class dev.pam.audio.AudioPlayerModule { <init>(android.content.Context); }

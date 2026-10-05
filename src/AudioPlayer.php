@@ -189,9 +189,17 @@ final class AudioPlayer
         ], function (NativeModuleResult $result): void {
             if (!$result->succeeded()) {
                 $this->fail($result->message());
+
+                return;
+            }
+            // Android creates the player on the main looper after `play`
+            // returns, so the event long-poll must start only once the player
+            // exists; polling earlier failed with "Player not found" and no
+            // state/progress/end event ever reached PHP.
+            if (!$this->stopped) {
+                $this->next();
             }
         });
-        $this->next();
 
         return $this;
     }

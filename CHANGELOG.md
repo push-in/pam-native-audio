@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 - 2026-10-05
+
+- Fix: start the event long-poll only after `play` succeeds. On Android the
+  player is created on the main looper, so polling `next` immediately failed
+  with "Player not found" and no state, progress or end event reached PHP
+  (the UI stayed in loading while audio played).
+
 ## 0.2.0 - 2026-10-05
 
 - iOS: `AudioPlayer` on `AVQueuePlayer` with the Android contract: native

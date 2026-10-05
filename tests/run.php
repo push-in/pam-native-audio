@@ -141,12 +141,25 @@ $test('playing a new player stops the current one', static function () use ($ins
 $test('failures surface through onError', static function () use ($check): void {
     AudioPlayer::current()?->stop();
     $transport = NativeTestHarness::install();
-    $transport->fail('audio-player', 'play', 'boom')->succeed('audio-player', 'next', ['kind' => 5, 'message' => 'Source error'], DispatchMode::Deferred)
+    // A failed `play` reports the error and never starts the event poll.
+    $transport->fail('audio-player', 'play', 'boom')->succeed('audio-player', 'stop');
+    $errors = [];
+    $player = AudioPlayer::make('voice/a.m4a')->onError(static function (string $message) use (&$errors): void { $errors[] = $message; })->play();
+    $check($errors === ['boom'] && $player->state() === PlaybackState::Failed, implode(',', $errors));
+    $player->stop();
+    NativeTestHarness::uninstall();
+});
+
+$test('event polling starts after play succeeds and surfaces source errors', static function () use ($check): void {
+    AudioPlayer::current()?->stop();
+    $transport = NativeTestHarness::install();
+    $transport->succeed('audio-player', 'play')
+        ->succeed('audio-player', 'next', ['kind' => 5, 'message' => 'Source error'], DispatchMode::Deferred)
         ->succeed('audio-player', 'next', [], DispatchMode::Deferred)->succeed('audio-player', 'stop');
     $errors = [];
     $player = AudioPlayer::make('voice/a.m4a')->onError(static function (string $message) use (&$errors): void { $errors[] = $message; })->play();
     $transport->flushOne();
-    $check($errors === ['boom', 'Source error'] && $player->state() === PlaybackState::Failed, implode(',', $errors));
+    $check($errors === ['Source error'] && $player->state() === PlaybackState::Failed, implode(',', $errors));
     $player->stop();
     NativeTestHarness::uninstall();
 });

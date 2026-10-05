@@ -40,7 +40,8 @@
             "ios/Sources"
         ],
         "frameworks": [
-            "AVFoundation"
+            "AVFoundation",
+            "CoreMedia"
         ]
     },
     "idl": "pam-native.idl.json",

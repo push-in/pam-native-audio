@@ -2,7 +2,7 @@
     "name": "pushinbr/pam-native-audio",
     "description": "Headless native audio player for PAM Native: queues, playback rate, audio focus, caching and proximity earpiece routing for voice notes.",
     "type": "pam-native-plugin",
-    "keywords": ["pam-native", "audio", "player", "voice-notes", "exoplayer", "android"],
+    "keywords": ["pam-native", "audio", "player", "voice-notes", "exoplayer", "avplayer", "android", "ios"],
     "license": "Apache-2.0",
     "require": {
         "php": "^8.5",

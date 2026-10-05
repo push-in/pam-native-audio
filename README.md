@@ -15,8 +15,14 @@ applications, built for chat voice notes and short media.
   route, end and failure arrive through the module event channel; PHP never polls.
 - **One current player** — starting a player stops the previous one.
 
-Android API 26+. iOS playback is not shipped in 0.1 (calls fail with a typed
-message).
+Android API 26+ and iOS 15+. On iOS the same contract runs on `AVQueuePlayer`:
+native queue and skip, pitch-preserving rate (`timeDomain`), progress from a
+periodic time observer, pause on interruptions and when headphones are
+unplugged, `playback`/`spokenAudio` on the speaker and `playAndRecord`/
+`voiceChat` on the earpiece with `UIDevice` proximity monitoring (the screen
+turns off at the ear). Remote sources stream on first play and are stored in a
+64 MiB LRU cache for the next one. The iOS implementation has not been
+validated on a device yet; see `ios/Tests/AudioPlayerTests.swift`.
 
 ## Install
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 - 2026-10-05
+
+- iOS: `AudioPlayer` on `AVQueuePlayer` with the Android contract: native
+  queue and skip, rate with pitch preserved, volume, seek, coalesced progress,
+  state/item/route/end/failure events, interruption and route-loss pauses,
+  proximity earpiece routing (`AVAudioSession` + `UIDevice` proximity) and a
+  64 MiB LRU cache for remote audio.
+- XCTest mirror of the Android suite (`ios/Tests`). Uncompiled on iOS; needs
+  device validation.
+
 ## 0.1.0 - 2026-10-05
 
 - Add headless `AudioPlayer` on ExoPlayer (Media3 1.10) with sandbox paths and

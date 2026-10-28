@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 - 2026-10-28
+
+- Voice recorder moved out of the PAM Native core (1.46): `AudioRecorder`,
+  `AudioRecording` and `AudioRecordingProgress` are now
+  `Pam\Native\Audio\*`, with the same `audio-recorder` native module and
+  wire payloads on Android and iOS. The plugin declares `RECORD_AUDIO` and
+  `NSMicrophoneUsageDescription`. Requires `pushinbr/pam-native` ^1.46 (the
+  plugin API `WatchChannel`).
+
 ## 0.2.1 - 2026-10-05
 
 - Fix: start the event long-poll only after `play` succeeds. On Android the

@@ -3,7 +3,7 @@
     "version": 1,
     "protocol": 1,
     "pamNative": {
-        "minimum": "1.0.35",
+        "minimum": "1.46.0",
         "maximumExclusive": "2.0.0"
     },
     "capabilities": {
@@ -20,10 +20,12 @@
         "namespace": "dev.pam.audio",
         "minSdk": 26,
         "permissions": [
+            "android.permission.RECORD_AUDIO",
             "android.permission.MODIFY_AUDIO_SETTINGS",
             "android.permission.WAKE_LOCK"
         ],
         "dependencies": [
+            "androidx.core:core-ktx:1.17.0",
             "androidx.media3:media3-exoplayer:1.10.1",
             "androidx.media3:media3-datasource:1.10.1",
             "androidx.media3:media3-database:1.10.1"
@@ -42,7 +44,10 @@
         "frameworks": [
             "AVFoundation",
             "CoreMedia"
-        ]
+        ],
+        "usageDescriptions": {
+            "NSMicrophoneUsageDescription": "Record voice messages."
+        }
     },
     "idl": "pam-native.idl.json",
     "modules": [
@@ -50,6 +55,11 @@
             "name": "audio-player",
             "class": "dev.pam.audio.AudioPlayerModule",
             "iosClass": "AudioPlayerModule"
+        },
+        {
+            "name": "audio-recorder",
+            "class": "dev.pam.audio.AudioRecorderModule",
+            "iosClass": "AudioRecorderModule"
         }
     ],
     "views": []

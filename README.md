@@ -65,6 +65,22 @@ AudioPlayer::make('https://cdn.example.com/voice/8f1c.m4a')
 New to PAM? Follow the **[five-minute PAM Native setup](https://push-in.github.io/pam-docs/native/overview/)** once, then return here. Your application stays a normal Composer project with a committed lockfile.
 <!-- pam:product-page:end -->
 
+## Voice recorder
+
+Moved from the PAM Native core in 1.46 (`Pam\Native\System\AudioRecorder`
+is a deprecated alias for 1.46 only):
+
+```php
+use Pam\Native\Audio\AudioRecorder;
+use Pam\Native\Audio\AudioRecording;
+
+AudioRecorder::start(static function (): void {});
+AudioRecorder::stop(static function (AudioRecording $recording): void {
+    // $recording->relativePath, durationMs, size, mimeType
+});
+```
+
+
 ## Install
 
 ```bash

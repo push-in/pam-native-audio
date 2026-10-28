@@ -172,9 +172,11 @@ $test('sources must be URLs or sandbox-relative paths', static function () use (
     $throws(InvalidArgumentException::class, static fn () => AudioPlayer::make('voice/a.m4a', 'bad id'));
 });
 
-$test('manifest targets PAM Native 1.0.35 with ExoPlayer', static function () use ($check): void {
+$test('manifest targets PAM Native 1.46 (recorder plugin hooks) with ExoPlayer', static function () use ($check): void {
     $plugin = json_decode((string) file_get_contents(dirname(__DIR__).'/pam-native.plugin.json'), true, flags: JSON_THROW_ON_ERROR);
-    $check($plugin['pamNative'] === ['minimum' => '1.0.35', 'maximumExclusive' => '2.0.0'], 'range');
+    $check($plugin['pamNative'] === ['minimum' => '1.46.0', 'maximumExclusive' => '2.0.0'], 'range');
+    $check(in_array('android.permission.RECORD_AUDIO', $plugin['android']['permissions'], true), 'record audio');
+    $check(array_column($plugin['modules'], 'name') === ['audio-player', 'audio-recorder'], 'modules');
     $check(in_array('androidx.media3:media3-exoplayer:1.10.1', $plugin['android']['dependencies'], true), 'exoplayer');
     $check(in_array('android.permission.WAKE_LOCK', $plugin['android']['permissions'], true), 'wake lock');
 });
@@ -188,6 +190,11 @@ foreach ($tests as $name => $body) {
         $failed++;
         fwrite(STDERR, "FAIL {$name}: {$error->getMessage()}\n");
     }
+}
+// Contracts moved from the PAM Native core in 1.46 run in their own process (own native-call harness).
+passthru(escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/recorder.php'), $movedContracts);
+if ($movedContracts !== 0) {
+    exit($movedContracts);
 }
 fwrite(STDOUT, count($tests)." tests, {$failed} failures\n");
 exit($failed === 0 ? 0 : 1);

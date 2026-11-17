@@ -59,7 +59,7 @@ Event handlers run on the PHP worker; writing component properties from them re-
 
 | Platform | Support | Notes |
 | --- | --- | --- |
-| Android | API 26+ | Media3 ExoPlayer, datasource and database 1.10.1; 64 MiB LRU cache in `cacheDir/pam-audio-cache` |
+| Android | API 24+ | Media3 ExoPlayer, datasource and database 1.10.1; 64 MiB LRU cache in `cacheDir/pam-audio-cache` |
 | iOS | 15.0+ | `AVQueuePlayer` + `AVAudioSession` (AVFoundation, CoreMedia); not validated on a device yet |
 | PAM Native | 1.46.0 to < 2.0.0 | From `pam-native.plugin.json`; PHP 8.5+ |
 

@@ -18,7 +18,7 @@
     },
     "android": {
         "namespace": "dev.pam.audio",
-        "minSdk": 26,
+        "minSdk": 24,
         "permissions": [
             "android.permission.RECORD_AUDIO",
             "android.permission.MODIFY_AUDIO_SETTINGS",

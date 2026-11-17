@@ -273,9 +273,29 @@ class PamAudioPlayer internal constructor(context: Context, private val config: 
         if (report) emit(EVENT_ROUTE, "route" to WireValue.Integer(if (on) ROUTE_EARPIECE.toLong() else ROUTE_SPEAKER.toLong()))
     }
 
-    private var voiceFocus: AudioFocusRequest? = null
+    // An AudioFocusRequest on API 26+, the listener itself on Android 7.x.
+    private var voiceFocus: Any? = null
+
+    private val voiceFocusListener = AudioManager.OnAudioFocusChangeListener { change: Int ->
+        if (change == AudioManager.AUDIOFOCUS_LOSS && !finished) player.pause()
+    }
+
+    // Android 7.x has no Handler overload: hop to the player thread here.
+    private val legacyVoiceFocusListener = AudioManager.OnAudioFocusChangeListener { change: Int ->
+        handler.post { voiceFocusListener.onAudioFocusChange(change) }
+    }
 
     private fun requestVoiceFocus() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            @Suppress("DEPRECATION")
+            audio.requestAudioFocus(
+                legacyVoiceFocusListener,
+                AudioManager.STREAM_VOICE_CALL,
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT,
+            )
+            voiceFocus = legacyVoiceFocusListener
+            return
+        }
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
             .setAudioAttributes(
                 android.media.AudioAttributes.Builder()
@@ -283,17 +303,21 @@ class PamAudioPlayer internal constructor(context: Context, private val config: 
                     .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build(),
             )
-            .setOnAudioFocusChangeListener({ change: Int ->
-                if (change == AudioManager.AUDIOFOCUS_LOSS && !finished) player.pause()
-            }, handler)
+            .setOnAudioFocusChangeListener(voiceFocusListener, handler)
             .build()
         audio.requestAudioFocus(request)
         voiceFocus = request
     }
 
     private fun abandonVoiceFocus() {
-        voiceFocus?.let(audio::abandonAudioFocusRequest)
+        val focus = voiceFocus ?: return
         voiceFocus = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && focus is AudioFocusRequest) {
+            audio.abandonAudioFocusRequest(focus)
+        } else if (focus is AudioManager.OnAudioFocusChangeListener) {
+            @Suppress("DEPRECATION")
+            audio.abandonAudioFocus(focus)
+        }
     }
 
     @SuppressLint("WakelockTimeout")

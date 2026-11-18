@@ -172,9 +172,19 @@ $test('sources must be URLs or sandbox-relative paths', static function () use (
     $throws(InvalidArgumentException::class, static fn () => AudioPlayer::make('voice/a.m4a', 'bad id'));
 });
 
-$test('manifest targets PAM Native 1.46 (recorder plugin hooks) with ExoPlayer', static function () use ($check): void {
+$test('manifest targets the PAM Native release composer requires (recorder plugin hooks) with ExoPlayer', static function () use ($check): void {
     $plugin = json_decode((string) file_get_contents(dirname(__DIR__).'/pam-native.plugin.json'), true, flags: JSON_THROW_ON_ERROR);
-    $check($plugin['pamNative'] === ['minimum' => '1.46.0', 'maximumExclusive' => '2.0.0'], 'range');
+    $check((static function (array $range): bool {
+        // The range follows composer.json's PAM Native requirement (^X.Y.Z):
+        // a core bump updates both files and never this test.
+        $composer = json_decode((string) file_get_contents(dirname(__DIR__).'/composer.json'), true, flags: JSON_THROW_ON_ERROR);
+        $required = ltrim((string) $composer['require']['pushinbr/pam-native'], '^');
+        $minimum = (string) ($range['minimum'] ?? '');
+        return preg_match('/^\d+\.\d+\.\d+$/', $minimum) === 1
+            && version_compare($minimum, '1.0.35', '>=')
+            && version_compare(preg_match('/^\d+\.\d+$/', $required) ? $required.'.0' : $required, $minimum, '==')
+            && ($range['maximumExclusive'] ?? null) === '2.0.0';
+    })($plugin['pamNative']), 'range');
     $check(in_array('android.permission.RECORD_AUDIO', $plugin['android']['permissions'], true), 'record audio');
     $check(array_column($plugin['modules'], 'name') === ['audio-player', 'audio-recorder'], 'modules');
     $check(in_array('androidx.media3:media3-exoplayer:1.10.1', $plugin['android']['dependencies'], true), 'exoplayer');

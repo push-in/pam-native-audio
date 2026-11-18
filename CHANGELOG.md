@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2 - 2026-11-18
+
+- Tests: the PAM Native range check follows the requirement in composer.json
+  (the manifest minimum must equal it, below 2.0.0) instead of a hardcoded
+  version. The previous release raised the requirement to 1.53.1 and kept the
+  old expectation, so `composer test` failed and blocked the PAM Native
+  release certification.
+
 ## 0.3.1 - 2026-11-17
 
 - Android 7.0/7.1 support: the plugin declares minSdk 24 and every newer Android API it uses has a version check and fallback. Requires PAM Native 1.53.1 or later.

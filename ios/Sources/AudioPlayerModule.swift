@@ -350,12 +350,33 @@ final class PamAudioPlayer: NSObject {
         }
     }
 
-    private func observe() {
+    /// Progress for the UI only: the periodic observer exists while the app is
+    /// in the foreground (playback goes on in the background without wakeups).
+    private func addProgressObserver() {
+        guard timeObserver == nil else { return }
         let interval = CMTime(value: config.progressInterval, timescale: 1_000)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
             guard let self, self.player.timeControlStatus == .playing else { return }
             self.emitProgress()
         }
+    }
+
+    private func removeProgressObserver() {
+        if let timeObserver { player.removeTimeObserver(timeObserver) }
+        timeObserver = nil
+    }
+
+    private func observe() {
+        addProgressObserver() // playback starts from the foreground; backgrounding removes it
+        let center = NotificationCenter.default
+        notifications.append(center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.removeProgressObserver()
+        })
+        notifications.append(center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self, !self.finished else { return }
+            self.emitProgress()
+            self.addProgressObserver()
+        })
         observations.append(player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             DispatchQueue.main.async { self?.onStatus(player.timeControlStatus) }
         })
@@ -368,7 +389,6 @@ final class PamAudioPlayer: NSObject {
                 self.emit(Self.eventItemChanged, ["index": .integer(Int64(self.index))])
             }
         })
-        let center = NotificationCenter.default
         notifications.append(center.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] note in
             guard let self, let item = note.object as? AVPlayerItem, self.player.items().last === item || self.player.items().isEmpty else { return }
             if self.index >= self.urls.count - 1 { self.finish() }
@@ -441,8 +461,7 @@ final class PamAudioPlayer: NSObject {
         }
         released = true
         finished = true
-        if let timeObserver { player.removeTimeObserver(timeObserver) }
-        timeObserver = nil
+        removeProgressObserver()
         observations.forEach { $0.invalidate() }
         observations = []
         notifications.forEach { NotificationCenter.default.removeObserver($0) }

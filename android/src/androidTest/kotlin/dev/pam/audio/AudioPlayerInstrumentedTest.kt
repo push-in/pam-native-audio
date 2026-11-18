@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.pam.nativeapp.modules.ModuleCompletion
@@ -38,6 +39,11 @@ class AudioPlayerInstrumentedTest {
 
     @Before
     fun writeFixtures() {
+        // The test process has no started activity: present the app as shown.
+        onMain {
+            PamAudioPlayer.HostVisibility.ensureObserving()
+            PamAudioPlayer.HostVisibility.onStart(ProcessLifecycleOwner.get())
+        }
         val dir = File(context.filesDir, "pam-files/voice").apply { mkdirs() }
         wav(File(dir, "a.wav"), 1_200)
         wav(File(dir, "b.wav"), 900)
@@ -161,6 +167,24 @@ class AudioPlayerInstrumentedTest {
         assertTrue(call("setRoute", mapOf("playerId" to WireValue.Text("r1"), "route" to WireValue.Integer(2))).ok)
         onMain { player.simulateProximity(true) }
         assertFalse(onMain { player.isEarpiece() })
+    }
+
+    @Test
+    fun progressStopsWhileTheAppIsInTheBackgroundAndPlaybackGoesOn() {
+        assertTrue(play("bg", "voice/long.wav", interval = 50).ok)
+        val events = collect("bg")
+        awaitEvent(events) { it.int("kind") == 1L && it.int("position") > 0 }
+        onMain { PamAudioPlayer.HostVisibility.onStop(ProcessLifecycleOwner.get()) }
+        Thread.sleep(200)
+        events.clear()
+        Thread.sleep(600)
+        assertTrue("no progress while stopped: $events", events.none { it.int("kind") == 1L })
+        assertTrue(AudioPlayers.get("bg")!!.isPlaying())
+        val before = onMain { AudioPlayers.get("bg")!!.position() }
+        onMain { PamAudioPlayer.HostVisibility.onStart(ProcessLifecycleOwner.get()) }
+        val fresh = awaitEvent(events, timeoutMillis = 1_000) { it.int("kind") == 1L }
+        assertTrue(fresh.int("position") >= before)
+        awaitEvent(events, timeoutMillis = 1_000) { it.int("kind") == 1L && it.int("position") > fresh.int("position") }
     }
 
     @Test

@@ -11,6 +11,9 @@ public final class AudioRecorderModule: NSObject, NativeModule, ClosableNativeMo
     private var outputURL: URL?
     private var nextWatchId = 1
     private var watches: [Int: RecorderWatch] = [:]
+    /// The partial recording an interruption finished, until stop() or cancel() collects it (mirrors Android).
+    private var interrupted: [String: WireValue]?
+    private var interruptionObserver: NSObjectProtocol?
 
     public func invoke(method: String, payload: Data, completion: @escaping ModuleCompletion) {
         DispatchQueue.main.async {
@@ -46,6 +49,7 @@ public final class AudioRecorderModule: NSObject, NativeModule, ClosableNativeMo
         guard recorder == nil else {
             throw AudioRecorderError.message("An audio recording is already active")
         }
+        interrupted = nil
         let session = AVAudioSession.sharedInstance()
         guard session.recordPermission == .granted else {
             throw AudioRecorderError.message("Microphone permission is required")
@@ -71,9 +75,59 @@ public final class AudioRecorderModule: NSObject, NativeModule, ClosableNativeMo
         }
         outputURL = url
         recorder = next
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let raw = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? NSNumber)?.uintValue
+            guard raw == AVAudioSession.InterruptionType.began.rawValue else { return }
+            self?.interrupt()
+        }
+    }
+
+    private func removeInterruptionObserver() {
+        if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
+        interruptionObserver = nil
+    }
+
+    /// A call or another app took the session: finish the partial file and tell the watchers.
+    private func interrupt() {
+        guard let active = recorder, let url = outputURL else { return }
+        let durationMs = max(0, Int64(active.currentTime * 1_000))
+        active.stop()
+        recorder = nil
+        outputURL = nil
+        removeInterruptionObserver()
+        let size = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
+        let recording: [String: WireValue]? = size > 0 ? Self.recordingValues(url, durationMs: durationMs, size: size) : nil
+        if recording == nil { try? FileManager.default.removeItem(at: url) }
+        interrupted = recording
+        var event = recording ?? [:]
+        event["interrupted"] = .flag(true)
+        let data = (try? WireMap.encode(event)) ?? Data()
+        // Watchers keep their channel (closing would drop the queued event) until PHP unwatches.
+        for watch in watches.values {
+            watch.timer.cancel()
+            watch.channel.offer(data)
+        }
+    }
+
+    private static func recordingValues(_ url: URL, durationMs: Int64, size: Int64) -> [String: WireValue] {
+        [
+            "uri": .text(url.absoluteString),
+            "relativePath": .text("recordings/\(url.lastPathComponent)"),
+            "fileName": .text(url.lastPathComponent),
+            "mimeType": .text("audio/mp4"),
+            "durationMs": .integer(durationMs),
+            "size": .integer(max(0, size)),
+        ]
     }
 
     private func stop() throws -> Data {
+        if let recording = interrupted {
+            interrupted = nil
+            stopWatches()
+            return try WireMap.encode(recording)
+        }
         guard let active = recorder, let url = outputURL else {
             throw AudioRecorderError.message("No audio recording is active")
         }
@@ -82,21 +136,20 @@ public final class AudioRecorderModule: NSObject, NativeModule, ClosableNativeMo
         active.stop()
         recorder = nil
         outputURL = nil
+        removeInterruptionObserver()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
-        return try WireMap.encode([
-            "uri": .text(url.absoluteString),
-            "relativePath": .text("recordings/\(url.lastPathComponent)"),
-            "fileName": .text(url.lastPathComponent),
-            "mimeType": .text("audio/mp4"),
-            "durationMs": .integer(durationMs),
-            "size": .integer(max(0, size)),
-        ])
+        return try WireMap.encode(Self.recordingValues(url, durationMs: durationMs, size: size))
     }
 
     private func release(deleteOutput: Bool) {
         stopWatches()
+        removeInterruptionObserver()
+        if deleteOutput, case let .text(uri)? = interrupted?["uri"], let url = URL(string: uri) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        interrupted = nil
         recorder?.stop()
         recorder = nil
         if deleteOutput, let outputURL {

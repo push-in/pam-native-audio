@@ -15,6 +15,9 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import androidx.annotation.OptIn
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -72,11 +75,25 @@ class PamAudioPlayer internal constructor(context: Context, private val config: 
         private set
     private var released = false
 
+    /** Progress for the UI; it stops while no activity of the app is started (playback goes on). */
     private val ticker = object : Runnable {
         override fun run() {
+            if (!HostVisibility.started) return
             emitProgress()
             handler.postDelayed(this, config.progressInterval)
         }
+    }
+
+    /** The app is shown again: one fresh position, then the ticker if still playing. */
+    internal fun hostStarted() {
+        if (released || finished) return
+        handler.removeCallbacks(ticker)
+        emitProgress()
+        if (player.isPlaying) handler.postDelayed(ticker, config.progressInterval)
+    }
+
+    internal fun hostStopped() {
+        handler.removeCallbacks(ticker)
     }
 
     private val listener = object : Player.Listener {
@@ -114,6 +131,7 @@ class PamAudioPlayer internal constructor(context: Context, private val config: 
     }
 
     fun start() {
+        HostVisibility.track(this)
         player = ExoPlayer.Builder(app)
             .setAudioAttributes(attributes(earpiece = false), true)
             .setHandleAudioBecomingNoisy(true)
@@ -193,6 +211,7 @@ class PamAudioPlayer internal constructor(context: Context, private val config: 
         }
         released = true
         finished = true
+        HostVisibility.untrack(this)
         handler.removeCallbacks(ticker)
         updateProximityListening(false)
         routeToEarpiece(false, report = false)
@@ -368,6 +387,48 @@ class PamAudioPlayer internal constructor(context: Context, private val config: 
     }
 
     // endregion
+
+    /**
+     * Whether the app has a started activity (ProcessLifecycleOwner), shared
+     * by every player: progress ticks only matter while something can show
+     * them, so a voice note playing in the background costs no wakeups.
+     */
+    internal object HostVisibility : DefaultLifecycleObserver {
+        @Volatile
+        var started = true
+            private set
+        private val players = java.util.concurrent.CopyOnWriteArraySet<PamAudioPlayer>()
+        private var observing = false
+
+        /** Main thread. */
+        fun track(player: PamAudioPlayer) {
+            players += player
+            ensureObserving()
+        }
+
+        /** Main thread; registers once with the process lifecycle. */
+        fun ensureObserving() {
+            if (observing) return
+            observing = true
+            val lifecycle = ProcessLifecycleOwner.get().lifecycle
+            started = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+            lifecycle.addObserver(this)
+        }
+
+        fun untrack(player: PamAudioPlayer) {
+            players -= player
+        }
+
+        override fun onStart(owner: LifecycleOwner) {
+            started = true
+            players.forEach(PamAudioPlayer::hostStarted)
+        }
+
+        override fun onStop(owner: LifecycleOwner) {
+            started = false
+            players.forEach(PamAudioPlayer::hostStopped)
+        }
+    }
 
     companion object {
         const val ROUTE_AUTO = 1

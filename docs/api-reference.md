@@ -21,7 +21,7 @@ One player is current at a time: `play()` on a new player stops the previous one
 | `volume(float $volume): self` | Clamped to 0–1. Applied live when playing. |
 | `startAt(int $millis): self` | Start position of the first item. Before `play()`. |
 | `progressInterval(int $millis): self` | Progress event interval, clamped to 50–5000 ms (default 250). Before `play()`. |
-| `onProgress(Closure(PlaybackProgress, AudioPlayer))` | Coalesced native ticker. |
+| `onProgress(Closure(PlaybackProgress, AudioPlayer))` | Coalesced native ticker. It pauses while the app is in the background (Android: no started activity; iOS: after `didEnterBackground`), playback goes on, and one fresh progress event arrives on return. |
 | `onStateChange(Closure(PlaybackState, AudioPlayer))` | State transitions. |
 | `onItemChange(Closure(int, string, AudioPlayer))` | Queue index and source. |
 | `onRouteChange(Closure(AudioRoute, AudioPlayer))` | `Speaker`/`Earpiece` switches. |
@@ -64,3 +64,16 @@ One player is current at a time: `play()` on a new player stops the previous one
   a stopped player ("create a new one").
 - Native failures (unreadable file, network error, decoder error, "Player … not
   found") arrive through `onError()` and set the state to `Failed`.
+
+## AudioRecorder
+
+`AudioRecorder::start()`, `stop()`, `cancel()`, `discard($uri)` and
+`watch(Closure(AudioRecordingProgress) $callback, int $intervalMs = 100, ?Closure(string) $failure = null, ?Closure(?AudioRecording) $interrupted = null)`.
+
+While recording the plugin holds transient audio focus (Android) or the
+active `AVAudioSession` (iOS). When the system interrupts the recording (an
+incoming call, another app taking the microphone), the recorder stops and
+keeps the partial file: `$interrupted` receives it (`null` when it was too
+short to keep) and the watch ends. Until the next `start()`, `stop()` returns
+that partial recording and `cancel()` deletes it, so an app that missed the
+callback still ends the recording as a preview.

@@ -17,7 +17,7 @@ final class AudioRecorder
 {
     private static int $nextSubscription = 1;
 
-    /** @var array<int, array{callback: Closure, failure: ?Closure, native: ?int}> */
+    /** @var array<int, array{callback: Closure, failure: ?Closure, interrupted: ?Closure, native: ?int}> */
     private static array $subscriptions = [];
 
     private function __construct()
@@ -55,15 +55,7 @@ final class AudioRecorder
 
                     return;
                 }
-                $values = Wire::decodeMap($result->payload);
-                $callback(new AudioRecording(
-                    uri: (string) ($values['uri'] ?? ''),
-                    fileName: (string) ($values['fileName'] ?? 'voice.m4a'),
-                    mimeType: (string) ($values['mimeType'] ?? 'audio/mp4'),
-                    durationMs: max(0, (int) ($values['durationMs'] ?? 0)),
-                    size: max(0, (int) ($values['size'] ?? 0)),
-                    relativePath: (string) ($values['relativePath'] ?? ''),
-                ));
+                $callback(self::recording(Wire::decodeMap($result->payload)));
             },
         );
     }
@@ -104,13 +96,24 @@ final class AudioRecorder
         );
     }
 
-    /** @param Closure(AudioRecordingProgress): void $callback @param null|Closure(string): void $failure */
-    public static function watch(Closure $callback, int $intervalMs = 100, ?Closure $failure = null): int
+    /**
+     * Progress while recording. When the system interrupts the recording (an
+     * incoming call or another app takes the microphone), the recorder stops
+     * and keeps the partial file: `$interrupted` receives it (null when it was
+     * too short to keep) and the watch ends. `stop()` also returns that
+     * partial recording, and `cancel()` deletes it.
+     *
+     * @param Closure(AudioRecordingProgress): void $callback
+     * @param null|Closure(string): void $failure
+     * @param null|Closure(?AudioRecording): void $interrupted
+     */
+    public static function watch(Closure $callback, int $intervalMs = 100, ?Closure $failure = null, ?Closure $interrupted = null): int
     {
         $subscription = self::$nextSubscription++;
         self::$subscriptions[$subscription] = [
             'callback' => $callback,
             'failure' => $failure,
+            'interrupted' => $interrupted,
             'native' => null,
         ];
         NativeModules::call(
@@ -182,12 +185,31 @@ final class AudioRecorder
                     return;
                 }
                 $values = Wire::decodeMap($result->payload);
+                if ((bool) ($values['interrupted'] ?? false)) {
+                    self::unwatch($subscription);
+                    $watch['interrupted']?->__invoke(isset($values['uri']) ? self::recording($values) : null);
+
+                    return;
+                }
                 ($watch['callback'])(new AudioRecordingProgress(
                     durationMs: max(0, (int) ($values['durationMs'] ?? 0)),
                     amplitude: max(0.0, min(1.0, (float) ($values['amplitude'] ?? 0.0))),
                 ));
                 self::next($subscription);
             },
+        );
+    }
+
+    /** @param array<string, mixed> $values */
+    private static function recording(array $values): AudioRecording
+    {
+        return new AudioRecording(
+            uri: (string) ($values['uri'] ?? ''),
+            fileName: (string) ($values['fileName'] ?? 'voice.m4a'),
+            mimeType: (string) ($values['mimeType'] ?? 'audio/mp4'),
+            durationMs: max(0, (int) ($values['durationMs'] ?? 0)),
+            size: max(0, (int) ($values['size'] ?? 0)),
+            relativePath: (string) ($values['relativePath'] ?? ''),
         );
     }
 

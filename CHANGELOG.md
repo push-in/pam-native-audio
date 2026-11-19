@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 - 2026-11-18
+
+- Fixed: the recorder ends on an audio interruption keeping the partial file (watch interrupted callback; stop() returns it).
+- Changed: playback progress pauses while the app is in the background.
+
 ## 0.3.2 - 2026-11-18
 
 - Tests: the PAM Native range check follows the requirement in composer.json

@@ -10,6 +10,7 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -222,7 +223,7 @@ class PamAudioPlayer internal constructor(context: Context, private val config: 
 
     private fun mediaSource(source: String): MediaSource {
         val uri = if (source.startsWith("http://", true) || source.startsWith("https://", true)) {
-            Uri.parse(source)
+            source.toUri()
         } else {
             val root = File(app.filesDir, "pam-files").canonicalFile
             val file = File(root, source).canonicalFile

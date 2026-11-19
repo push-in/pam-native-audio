@@ -26,6 +26,7 @@ android {
 
 dependencies {
     api(project(":plugin-api"))
+    implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.lifecycle:lifecycle-process:2.6.2")
     implementation("androidx.media3:media3-exoplayer:1.10.1")
     implementation("androidx.media3:media3-datasource:1.10.1")

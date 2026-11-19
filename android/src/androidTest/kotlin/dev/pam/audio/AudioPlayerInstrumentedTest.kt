@@ -179,7 +179,7 @@ class AudioPlayerInstrumentedTest {
         events.clear()
         Thread.sleep(600)
         assertTrue("no progress while stopped: $events", events.none { it.int("kind") == 1L })
-        assertTrue(AudioPlayers.get("bg")!!.isPlaying())
+        assertTrue(onMain { AudioPlayers.get("bg")!!.isPlaying() })
         val before = onMain { AudioPlayers.get("bg")!!.position() }
         onMain { PamAudioPlayer.HostVisibility.onStart(ProcessLifecycleOwner.get()) }
         val fresh = awaitEvent(events, timeoutMillis = 1_000) { it.int("kind") == 1L }

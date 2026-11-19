@@ -33,7 +33,9 @@ class AudioRecorderInstrumentedTest {
     private val context: Context = instrumentation.targetContext
     private val module = AudioRecorderModule(context)
     private val audio = context.getSystemService(AudioManager::class.java)
-    private var thief: AudioFocusRequest? = null
+    /** AudioFocusRequest on Android 8.0+, the legacy listener before (field typed Any: Android 7 has no such class). */
+    private var thief: Any? = null
+    private val legacyThief = AudioManager.OnAudioFocusChangeListener { }
 
     private data class Result(val ok: Boolean, val values: Map<String, WireValue>, val message: String)
 
@@ -45,7 +47,11 @@ class AudioRecorderInstrumentedTest {
 
     @After
     fun cleanup() {
-        thief?.let { audio.abandonAudioFocusRequest(it) }
+        when (val current = thief) {
+            null -> Unit
+            is AudioManager.OnAudioFocusChangeListener -> @Suppress("DEPRECATION") audio.abandonAudioFocus(current)
+            else -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) audio.abandonAudioFocusRequest(current as AudioFocusRequest)
+        }
         module.close()
     }
 
@@ -62,7 +68,6 @@ class AudioRecorderInstrumentedTest {
 
     @Test
     fun losingAudioFocusEndsTheRecordingWithThePartialFile() {
-        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
         val started = call("start")
         assumeTrue("Microphone unavailable on this device: ${started.message}", started.ok)
         val subscription = (call("watch", mapOf("intervalMs" to WireValue.Integer(100))).values["subscription"] as WireValue.Integer).value
@@ -79,10 +84,16 @@ class AudioRecorderInstrumentedTest {
         arm()
         Thread.sleep(1_500)
         // A call (or any other app) takes transient focus.
-        thief = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).build())
-            .build()
-            .also { audio.requestAudioFocus(it) }
+        thief = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).build())
+                .build()
+                .also { audio.requestAudioFocus(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audio.requestAudioFocus(legacyThief, AudioManager.STREAM_RING, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            legacyThief
+        }
         val deadline = System.currentTimeMillis() + 5_000
         var interrupted: Map<String, WireValue>? = null
         while (interrupted == null && System.currentTimeMillis() < deadline) {

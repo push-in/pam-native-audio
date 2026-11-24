@@ -30,7 +30,11 @@ use Pam\Native\Audio\AudioRoute;
 use Pam\Native\Audio\PlaybackProgress;
 use Pam\Native\Audio\PlaybackRate;
 use Pam\Native\Audio\PlaybackState;
+use Pam\Native\Component;
+use Pam\Native\Disposable;
+use Pam\Native\Internal\ComponentLifecycle;
 use Pam\Native\Internal\Wire;
+use Pam\Native\Renderable;
 use Pam\Native\Testing\DispatchMode;
 use Pam\Native\Testing\FakeNativeModuleTransport;
 use Pam\Native\Testing\NativeTestHarness;
@@ -189,6 +193,68 @@ $test('manifest targets the PAM Native release composer requires (recorder plugi
     $check(array_column($plugin['modules'], 'name') === ['audio-player', 'audio-recorder'], 'modules');
     $check(in_array('androidx.media3:media3-exoplayer:1.10.1', $plugin['android']['dependencies'], true), 'exoplayer');
     $check(in_array('android.permission.WAKE_LOCK', $plugin['android']['permissions'], true), 'wake lock');
+});
+
+final class AudioSnapshotFixture extends Component
+{
+    public static int $renders = 0;
+    private ?AudioPlayer $player = null;
+    /** Read by render(); written only when $mirror is set. */
+    private int $position = 0;
+
+    public function __construct(private readonly bool $mirror)
+    {
+    }
+
+    public function listen(AudioPlayer $player): AudioPlayer
+    {
+        $this->player = $player;
+        if ($this->mirror) {
+            $player->onProgress(function (PlaybackProgress $p): void { $this->position = $p->positionMillis; });
+        }
+
+        return $player;
+    }
+
+    public function render(): Renderable
+    {
+        self::$renders++;
+
+        return Pam\Native\UI\Text::make("position-{$this->position}");
+    }
+}
+
+$test('a component holding a player does not re-render on progress ticks', static function () use ($install, $check): void {
+    $progress = static fn (int $position): array => ['kind' => 1, 'position' => $position, 'duration' => 2000, 'buffered' => 2000, 'index' => 0];
+    $renderOnce = static function (Component $component): void {
+        ComponentLifecycle::beginRender();
+        $component->toElement();
+        ComponentLifecycle::finishRender();
+        ComponentLifecycle::commit();
+    };
+    foreach ([false, true] as $mirror) {
+        $transport = $install();
+        $transport->succeed('audio-player', 'next', $progress(250), DispatchMode::Deferred)
+            ->succeed('audio-player', 'next', $progress(500), DispatchMode::Deferred)
+            ->succeed('audio-player', 'next', [], DispatchMode::Deferred);
+        $component = new AudioSnapshotFixture($mirror);
+        $player = $component->listen(AudioPlayer::make('voice/a.m4a'));
+        $check($player instanceof Disposable && !$player->disposed(), 'player is a live Disposable handle');
+        $renderOnce($component);
+        $player->play();
+        $transport->flush();
+        $check($player->progress()?->positionMillis === 500, 'progress stays readable from the player');
+        $check(
+            $component->__pamStateChanged() === $mirror,
+            $mirror
+                ? 'a field written by onProgress and read by the template must still render'
+                : 'progress ticks inside a held player must not render the component',
+        );
+        $player->dispose();
+        $check($player->disposed() && $player->isStopped() && AudioPlayer::current() === null, 'dispose() stops the player');
+        $player->dispose();
+        NativeTestHarness::uninstall();
+    }
 });
 
 $failed = 0;

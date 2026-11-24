@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 - 2026-11-24
+
+- Changed: `AudioPlayer` implements `Pam\Native\Disposable` (`dispose()` stops, `disposed()` reports `isStopped()`), so a component holding a player no longer re-renders on every progress event. Progress remains available through `progress()` and `onProgress()`.
+
 ## 0.4.0 - 2026-11-18
 
 - Fixed: the recorder ends on an audio interruption keeping the partial file (watch interrupted callback; stop() returns it).

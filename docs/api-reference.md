@@ -32,6 +32,7 @@ One player is current at a time: `play()` on a new player stops the previous one
 | `seek(int $millis): self` | Seeks the current item. |
 | `skipTo(int $index): self` | Jumps to a queue item. |
 | `stop(): void` | Stops and releases the native player; idempotent. |
+| `dispose(): void`, `disposed(): bool` | `Pam\Native\Disposable`: `dispose()` is `stop()`, `disposed()` is `isStopped()`. Pass the player to a component's `own()` to stop it on unmount. |
 | `state(): PlaybackState`, `progress(): ?PlaybackProgress`, `index(): int` | Last known values. |
 | `currentSource(): string`, `sources(): list<string>`, `playbackRate(): PlaybackRate`, `isStopped(): bool` | Inspection. |
 | `$id` | Readonly player id. |

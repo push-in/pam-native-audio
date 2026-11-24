@@ -27,6 +27,16 @@ AudioPlayer::stopAll();
 Event handlers run on the PHP worker; writing component properties from them
 re-renders only that component (PAM Native 1.2.1+ memoization).
 
+`AudioPlayer` is a `Pam\Native\Disposable` handle. A component field that holds
+one counts only by presence in the state snapshot: progress ticks, state
+changes and swapping one player for another don't render the component
+(setting the field to or from `null` still does). PAM Native 1.54.8 and
+older compare the player by identity instead: ticks don't render there
+either, but a swap does. What the template shows comes from the
+fields the callbacks above write (`$this->position`, `$this->playing`), never
+from `$this->player->progress()` read during render, which would show a stale
+value.
+
 ## Auto-advance through consecutive voice notes
 
 ```php

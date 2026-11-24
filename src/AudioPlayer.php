@@ -7,6 +7,7 @@ namespace Pam\Native\Audio;
 use Closure;
 use InvalidArgumentException;
 use LogicException;
+use Pam\Native\Disposable;
 use Pam\Native\Modules\NativeModuleResult;
 use Pam\Native\Modules\NativeModules;
 
@@ -17,8 +18,13 @@ use Pam\Native\Modules\NativeModules;
  * usual behaviour for voice notes. A queue advances natively (no PHP round
  * trip between items). Progress, state, item and end events are pushed through
  * the module event channel at the configured interval.
+ *
+ * A Disposable handle: a component field holding a player counts only by
+ * presence in the state snapshot, so progress ticks, state changes and
+ * swapping one player for another don't render the component. Templates read
+ * position and state from fields the onProgress/onStateChange callbacks write.
  */
-final class AudioPlayer
+final class AudioPlayer implements Disposable
 {
     public const string MODULE = 'audio-player';
 
@@ -245,6 +251,18 @@ final class AudioPlayer
         if (self::$current === $this) {
             self::$current = null;
         }
+    }
+
+    /** Disposable: stops the player (same as stop()). */
+    public function dispose(): void
+    {
+        $this->stop();
+    }
+
+    /** Disposable: true once stopped, ended or disposed. */
+    public function disposed(): bool
+    {
+        return $this->stopped;
     }
 
     public function state(): PlaybackState
